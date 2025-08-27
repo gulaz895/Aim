@@ -1,0 +1,216 @@
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+--// Config
+local FOV_RADIUS = 120
+local aimPart = "Head"
+local silentEnabled = true
+local menuVisible = false
+local rainbowHue = 0
+local rainbowSpeed = 3
+local espEnabled = true
+local inStun = false
+local STUN_HEALTH = 30 -- เลือดเริ่มค้าง
+
+--// GUI
+local CoreGui = game:GetService("CoreGui")
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = CoreGui
+
+-- Ninja Logo Button
+local LogoButton = Instance.new("ImageButton")
+LogoButton.Size = UDim2.new(0,50,0,50)
+LogoButton.Position = UDim2.new(0,10,0,10)
+LogoButton.BackgroundTransparency = 1
+LogoButton.Image = "rbxassetid://137290567"
+LogoButton.Parent = ScreenGui
+
+-- FOV Circle
+local Circle = Instance.new("Frame")
+Circle.Size = UDim2.new(0,FOV_RADIUS*2,0,FOV_RADIUS*2)
+Circle.Position = UDim2.new(0.5,-FOV_RADIUS,0.5,-FOV_RADIUS)
+Circle.BackgroundTransparency = 1
+Circle.BorderSizePixel = 0
+Circle.Parent = ScreenGui
+local UICorner = Instance.new("UICorner", Circle)
+UICorner.CornerRadius = UDim.new(1,0)
+local CircleStroke = Instance.new("UIStroke", Circle)
+CircleStroke.Thickness = 2
+CircleStroke.Color = Color3.fromHSV(0,1,1)
+
+-- Menu Frame
+local MenuFrame = Instance.new("Frame")
+MenuFrame.Size = UDim2.new(0,180,0,280)
+MenuFrame.Position = UDim2.new(0,10,0,70)
+MenuFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+MenuFrame.Visible = menuVisible
+MenuFrame.Parent = ScreenGui
+
+-- Toggle Menu
+LogoButton.MouseButton1Click:Connect(function()
+    menuVisible = not menuVisible
+    MenuFrame.Visible = menuVisible
+end)
+
+-- Silent Aim Toggle
+local ToggleButton = Instance.new("TextButton", MenuFrame)
+ToggleButton.Size = UDim2.new(1,-20,0,40)
+ToggleButton.Position = UDim2.new(0,10,0,10)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(50,50,50)
+ToggleButton.TextColor3 = Color3.fromRGB(255,255,255)
+ToggleButton.Text = silentEnabled and "Silent: ON" or "Silent: OFF"
+ToggleButton.MouseButton1Click:Connect(function()
+    silentEnabled = not silentEnabled
+    ToggleButton.Text = silentEnabled and "Silent: ON" or "Silent: OFF"
+end)
+
+-- Aim Part Button
+local PartButton = Instance.new("TextButton", MenuFrame)
+PartButton.Size = UDim2.new(1,-20,0,40)
+PartButton.Position = UDim2.new(0,10,0,60)
+PartButton.BackgroundColor3 = Color3.fromRGB(50,50,50)
+PartButton.TextColor3 = Color3.fromRGB(255,255,255)
+PartButton.Text = "Aim: "..aimPart
+PartButton.MouseButton1Click:Connect(function()
+    if aimPart == "Head" then
+        aimPart = "UpperTorso"
+    elseif aimPart == "UpperTorso" then
+        aimPart = "LowerTorso"
+    else
+        aimPart = "Head"
+    end
+    PartButton.Text = "Aim: "..aimPart
+end)
+
+-- FOV Radius Box
+local RadiusBox = Instance.new("TextBox", MenuFrame)
+RadiusBox.Size = UDim2.new(1,-20,0,40)
+RadiusBox.Position = UDim2.new(0,10,0,110)
+RadiusBox.BackgroundColor3 = Color3.fromRGB(50,50,50)
+RadiusBox.TextColor3 = Color3.fromRGB(255,255,255)
+RadiusBox.PlaceholderText = "FOV Radius"
+RadiusBox.Text = tostring(FOV_RADIUS)
+RadiusBox.FocusLost:Connect(function()
+    local val = tonumber(RadiusBox.Text)
+    if val then
+        FOV_RADIUS = val
+        Circle.Size = UDim2.new(0,FOV_RADIUS*2,0,FOV_RADIUS*2)
+        Circle.Position = UDim2.new(0.5,-FOV_RADIUS,0.5,-FOV_RADIUS)
+    end
+end)
+
+-- ESP Tables
+local espLabels = {}
+local espItems = {}
+
+-- Rainbow FOV & ESP Update
+RunService.RenderStepped:Connect(function(dt)
+    rainbowHue = (rainbowHue + dt*rainbowSpeed*0.1) % 1
+    CircleStroke.Color = Color3.fromHSV(rainbowHue,1,1)
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            local root = plr.Character.HumanoidRootPart
+            local headOffset = Vector3.new(0,3,0)
+            local itemOffset = Vector3.new(0,2,0)
+            local headPos, onScreen = camera:WorldToViewportPoint(root.Position + headOffset)
+            local itemPos, itemOnScreen = camera:WorldToViewportPoint(root.Position + itemOffset)
+
+            -- ชื่อผู้เล่น
+            if not espLabels[plr] then
+                local nameLabel = Instance.new("TextLabel")
+                nameLabel.Size = UDim2.new(0,100,0,20)
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.TextColor3 = Color3.new(1,0,0)
+                nameLabel.TextScaled = true
+                nameLabel.TextStrokeTransparency = 0
+                nameLabel.Parent = ScreenGui
+                espLabels[plr] = nameLabel
+            end
+            espLabels[plr].Visible = espEnabled and onScreen
+            espLabels[plr].Position = UDim2.new(0, headPos.X-50, 0, headPos.Y-10)
+            espLabels[plr].Text = plr.Name
+
+            -- ของที่ถือ
+            if not espItems[plr] then
+                local itemLabel = Instance.new("TextLabel")
+                itemLabel.Size = UDim2.new(0,100,0,20)
+                itemLabel.BackgroundTransparency = 1
+                itemLabel.TextColor3 = Color3.new(1,1,0)
+                itemLabel.TextScaled = true
+                itemLabel.TextStrokeTransparency = 0
+                itemLabel.Parent = ScreenGui
+                espItems[plr] = itemLabel
+            end
+            espItems[plr].Visible = espEnabled and itemOnScreen
+            espItems[plr].Position = UDim2.new(0, itemPos.X-50, 0, itemPos.Y)
+            local heldItem = "None"
+            for _, tool in ipairs(plr.Backpack:GetChildren()) do
+                if tool:IsA("Tool") then heldItem = tool.Name end
+            end
+            espItems[plr].Text = heldItem
+        else
+            if espLabels[plr] then espLabels[plr].Visible = false end
+            if espItems[plr] then espItems[plr].Visible = false end
+        end
+    end
+end)
+
+-- Silent Aim Hook
+local old; old = hookmetamethod(game, "__namecall", function(self,...)
+    local args = {...}
+    local method = getnamecallmethod()
+    
+    if silentEnabled and method == "FireServer" and tostring(self) == "ShootEvent" then
+        local closest = nil
+        local shortestDist = math.huge
+        local center = Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)
+
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= player and plr.Team ~= player.Team and plr.Character and plr.Character:FindFirstChild(aimPart) then
+                local pos, onScreen = camera:WorldToViewportPoint(plr.Character[aimPart].Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X,pos.Y)-center).Magnitude
+                    if dist <= FOV_RADIUS and dist < shortestDist then
+                        shortestDist = dist
+                        closest = plr
+                    end
+                end
+            end
+        end
+
+        if closest then
+            local origin = camera.CFrame.Position
+            local direction = (closest.Character[aimPart].Position - origin).Unit * 500
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = {player.Character}
+            rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+            local ray = workspace:Raycast(origin, direction, rayParams)
+            if ray then
+                args[2] = ray.Position
+            else
+                args[2] = closest.Character[aimPart].Position
+            end
+            return old(self, unpack(args))
+        end
+    end
+    return old(self,...)
+end)
+
+-- ระบบกันตายทะลุพื้น 40 studs
+local function onCharacterAdded(char)
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    local humanoid = char:WaitForChild("Humanoid")
+    local noClip = false
+
+    RunService.Stepped:Connect(function()
+        if noClip then
+            for _, part in ipairs(char:GetChildren()) do
+                if part:IsA("BasePart") then part.CanCollide = false end
+            end
+        end
+    end
